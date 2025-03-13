@@ -1,0 +1,404 @@
+#0. show all index
+GET /globalhealth19
+
+#1.Filter documents with a specific Country
+GET globalhealth19/_search
+{
+  "query": {
+    "match": {
+      "Country": "Italy"
+    }
+  }
+}
+
+#2.Retrieve documents within a certain time range (Year)
+GET globalhealth19/_search
+{
+  "query": {
+    "range": {
+      "Year": {
+        "gte": 2020,
+        "lte": 2022
+      }
+    }
+  }
+}
+
+#3.Retrieve data for a specific demographic and disease category
+GET globalhealth19/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "term": { "Gender": "Female" } },
+        { "term": { "Disease Category": "Infectious" } }
+      ]
+    }
+  }
+}
+
+#4.Identify the top N countries by document count
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "top_countries": {
+      "terms": {
+        "field": "Country",
+        "size": 5
+      }
+    }
+  }
+}
+
+#5.Retrieve documents matching high mortality rate OR high recovery rate
+GET globalhealth19/_search
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "range": { "Mortality Rate (%)": { "gte": 5 } } },
+        { "range": { "Recovery Rate (%)": { "gte": 90 } } }
+      ],
+      "minimum_should_match": 1
+    }
+  }
+}
+
+#6.Search for disease names allowing minor typos
+GET globalhealth19/_search
+{
+  "query": {
+    "match": {
+      "Disease Name": {
+        "query": "tuberculosi",
+        "fuzziness": "AUTO"
+      }
+    }
+  }
+}
+
+#7.Calculate global average of doctors per 1000
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "avg_doctors": {
+      "avg": {
+        "field": "Doctors per 1000"
+      }
+    }
+  }
+}
+
+#8.Compare vaccine availability categories side by side
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "vaccine_comparison": {
+      "filters": {
+        "filters": {
+          "has_vaccine": {
+            "term": {
+              "Availability of Vaccines/Treatment": "Yes"
+            }
+          },
+          "no_vaccine": {
+            "term": {
+              "Availability of Vaccines/Treatment": "No"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+#9.Retrieve the latest record for each disease category
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "by_category": {
+      "terms": {
+        "field": "Disease Category",
+        "size": 10
+      },
+      "aggs": {
+        "latest_year": {
+          "top_hits": {
+            "sort": [
+              { "Year": { "order": "desc" } }
+            ],
+            "size": 1
+          }
+        }
+      }
+    }
+  }
+}
+
+#10.Find the costliest diseases by average treatment cost
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "costliest_diseases": {
+      "terms": {
+        "field": "Disease Name",
+        "size": 5,
+        "order": {
+          "avg_cost": "desc"
+        }
+      },
+      "aggs": {
+        "avg_cost": {
+          "avg": {
+            "field": "Average Treatment Cost (USD)"
+          }
+        }
+      }
+    }
+  }
+}
+
+#11.Group year data in intervals and keep high-affected populations only
+GET globalhealth19/_search
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "must": [
+        { "term": { "Disease Category": "Chronic" } }
+      ]
+    }
+  },
+  "aggs": {
+    "year_hist": {
+      "histogram": {
+        "field": "Year",
+        "interval": 5 
+      },
+      "aggs": {
+        "avg_population": {
+          "avg": {
+            "field": "Population Affected"
+          }
+        },
+        "population_filter": {
+          "bucket_selector": {
+            "buckets_path": {
+              "avgPop": "avg_population"
+            },
+            "script": "params.avgPop > 500000"
+          }
+        }
+      }
+    }
+  }
+} 
+
+#12.Get extended statistics for the population affected by a specific disease
+GET globalhealth19/_search
+{
+  "size": 0,
+  "query": {
+    "term": {
+      "Disease Name": "Diabetes"
+    }
+  },
+  "aggs": {
+    "population_stats": {
+      "extended_stats": {
+        "field": "Population Affected"
+      }
+    }
+  }
+}
+
+#13.Prioritize documents from wealthier contexts
+GET globalhealth19/_search
+{
+  "query": {
+    "function_score": {
+      "query": {
+        "term": {
+          "Disease Category": "Respiratory"
+        }
+      },
+      "script_score": {
+        "script": {
+          "source": "doc['Per Capita Income (USD)'].value"
+        }
+      },
+      "boost_mode": "replace"
+    }
+  }
+}
+
+#14.Compare age-group mortality side by side
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "age_comparison": {
+      "filters": {
+        "filters": {
+          "0_to_18": {
+            "term": { "Age Group": "0-18" }
+          },
+          "19_to_35": {
+            "term": { "Age Group": "19-35" }
+          },
+          "36_to_60": {
+            "term": { "Age Group": "36-60" }
+          },
+          "61_plus": {
+            "term": { "Age Group": "61+" }
+          }
+        }
+      },
+      "aggs": {
+        "avg_mortality": {
+          "avg": {
+            "field": "Mortality Rate (%)"
+          }
+        }
+      }
+    }
+  }
+}
+
+#15.Find diseases that stand out in a subpopulation
+GET globalhealth19/_search
+{
+  "query": {
+    "term": {
+      "Gender": "Male"
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "significant_diseases": {
+      "significant_terms": {
+        "field": "Disease Name",
+        "size": 5
+      }
+    }
+  }
+}
+
+#16.Highlight partial matches in disease names
+GET globalhealth19/_search
+{
+  "query": {
+    "wildcard": {
+      "Disease Name": "*flu*"
+    }
+  },
+  "highlight": {
+    "fields": {
+      "Disease Name": {}
+    }
+  }
+}
+
+#17.Break down data by year to compute average mortality
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "yearly_distribution": {
+      "histogram": {
+        "field": "Year",
+        "interval": 1
+      },
+      "aggs": {
+        "avg_mortality": {
+          "avg": {
+            "field": "Mortality Rate (%)"
+          }
+        }
+      }
+    }
+  }
+}
+
+#18.Dynamically compute the gap between healthcare access and education
+GET globalhealth19/_search
+{
+  "_source": ["Country", "Healthcare Access (%)", "Education Index"],
+  "script_fields": {
+    "access_education_gap": {
+      "script": {
+        "lang": "painless",
+        "source": "doc['Healthcare Access (%)'].value - doc['Education Index'].value"
+      }
+    }
+  },
+  "query": {
+    "match_all": {}
+  }
+}
+
+#19.Smooth data trends over time with a rolling average
+GET globalhealth19/_search
+{
+  "size": 0,
+  "aggs": {
+    "year_buckets": {
+      "histogram": {
+        "field": "Year",
+        "interval": 1
+      },
+      "aggs": {
+        "beds_avg": {
+          "avg": {
+            "field": "Hospital Beds per 1000"
+          }
+        },
+        "moving_avg_beds": {
+          "moving_fn": {
+            "buckets_path": "beds_avg",
+            "window": 3,
+            "script": "MovingFunctions.unweightedAvg(values)"
+          }
+        }
+      }
+    }
+  }
+}
+
+#20.Filter results by cost or urbanization, then rank by year
+GET globalhealth19/_search
+{
+  "query": {
+    "function_score": {
+      "query": {
+        "bool": {
+          "should": [
+            {
+              "range": { "Average Treatment Cost (USD)": { "gt": 2000 } }
+            },
+            {
+              "range": { "Urbanization Rate (%)": { "gt": 60 } }
+            }
+          ],
+          "must_not": [
+            {
+              "term": { "Availability of Vaccines/Treatment": "Unknown" }
+            }
+          ],
+          "minimum_should_match": 1
+        }
+      },
+      "script_score": {
+        "script": {
+          "source": "doc['Year'].value"
+        }
+      },
+      "boost_mode": "multiply"
+    }
+  }
+}
